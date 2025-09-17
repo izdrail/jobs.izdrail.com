@@ -1,0 +1,11 @@
+services:
+  jobs.izdrail.com:
+    build:
+      context: .
+    container_name: jobs.izdrail.com
+    image: izdrail/jobs.izdrail.com:latest
+    restart: always
+    ports:
+      - "8003:8003"
+    volumes:
+      - .:/home/osint/
