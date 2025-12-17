@@ -15,6 +15,8 @@ class Site(Enum):
     INDEED = "indeed"
     ZIP_RECRUITER = "zip_recruiter"
     GLASSDOOR = "glassdoor"
+    THE_GUARDIAN = "the_guardian"
+    CV_LIBRARY = "cv_library"
 
 
 class ScraperInput(BaseModel):

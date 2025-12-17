@@ -23,7 +23,7 @@ class JobsSearch(BaseModel):
 async def search_jobs(jobSearch: JobsSearch):
     try:
         jobs: pd.DataFrame = scrape_jobs(
-            site_name=["indeed", "linkedin", "glassdoor"],
+            site_name=["indeed", "linkedin", "glassdoor", "the_guardian", "cv_library"],
             search_term=jobSearch.keyword,
             description_format="html",
             location="United Kingdom",

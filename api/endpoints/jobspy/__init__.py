@@ -17,7 +17,8 @@ from .scrapers.exceptions import (
     ZipRecruiterException,
     GlassdoorException,
 )
-
+from .scrapers.theguardian import TheGuardianScraper
+from .scrapers.cvlibrary import CVLibraryScraper
 
 def scrape_jobs(
     site_name: str | list[str] | Site | list[Site] | None = None,
@@ -48,6 +49,8 @@ def scrape_jobs(
         Site.INDEED: IndeedScraper,
         Site.ZIP_RECRUITER: ZipRecruiterScraper,
         Site.GLASSDOOR: GlassdoorScraper,
+        Site.THE_GUARDIAN: TheGuardianScraper,
+        Site.CV_LIBRARY: CVLibraryScraper,
     }
     set_logger_level(verbose)
 

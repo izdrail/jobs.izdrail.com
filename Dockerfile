@@ -25,7 +25,7 @@ WORKDIR /home/osint
 # Install Python packages
 COPY ./requirements.txt /home/osint/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /home/osint/requirements.txt \
-    && pip install pandas python-multipart lighthouse-python-plus sqlalchemy yake fastapi_versioning tls_client uvicorn \
+    && pip install pandas python-multipart lighthouse-python-plus email-validator sqlalchemy yake fastapi_versioning tls_client uvicorn \
     && python3 -m nltk.downloader -d /usr/local/share/nltk_data wordnet punkt stopwords vader_lexicon \
     && python3 -m textblob.download_corpora
 
