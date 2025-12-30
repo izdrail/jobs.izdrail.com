@@ -17,6 +17,7 @@ class Site(Enum):
     GLASSDOOR = "glassdoor"
     THE_GUARDIAN = "the_guardian"
     CV_LIBRARY = "cv_library"
+    BUILTIN = "builtin"
 
 
 class ScraperInput(BaseModel):
