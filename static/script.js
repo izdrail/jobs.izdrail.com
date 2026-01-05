@@ -2,6 +2,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('search-form');
     const input = document.getElementById('search-input');
     const resultsContainer = document.getElementById('results-container');
+    const filtersSection = document.getElementById('filters-section');
+
+    let allJobs = []; // Store all jobs for filtering
+    let activeFilters = {
+        site: 'all',
+        type: 'all',
+        remote: 'all',
+        days: 'all'
+    };
+
+    // Initialize filter event listeners
+    initializeFilters();
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -10,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Show loading state
         resultsContainer.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+        filtersSection.style.display = 'none';
 
         try {
             const response = await fetch('/api/v1/jobs', {
@@ -25,7 +38,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
-            renderJobs(data.data);
+            allJobs = data.data || [];
+
+            // Sort by date descending (newest first)
+            allJobs.sort((a, b) => {
+                const dateA = a.date_posted ? new Date(a.date_posted) : new Date(0);
+                const dateB = b.date_posted ? new Date(b.date_posted) : new Date(0);
+                return dateB - dateA;
+            });
+
+            // Show filters and render jobs
+            if (allJobs.length > 0) {
+                filtersSection.style.display = 'block';
+            }
+            renderJobs(allJobs);
         } catch (error) {
             console.error(error);
             resultsContainer.innerHTML = `
@@ -37,11 +63,106 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function initializeFilters() {
+        // Site filters
+        document.querySelectorAll('#site-filters .filter-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                setActiveFilter('#site-filters', pill);
+                activeFilters.site = pill.dataset.site;
+                applyFilters();
+            });
+        });
+
+        // Type filters
+        document.querySelectorAll('#type-filters .filter-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                setActiveFilter('#type-filters', pill);
+                activeFilters.type = pill.dataset.type;
+                applyFilters();
+            });
+        });
+
+        // Remote filters
+        document.querySelectorAll('[data-remote]').forEach(pill => {
+            pill.addEventListener('click', () => {
+                setActiveFilter('[data-remote]', pill);
+                activeFilters.remote = pill.dataset.remote;
+                applyFilters();
+            });
+        });
+
+        // Date filters
+        document.querySelectorAll('#date-filters .filter-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                setActiveFilter('#date-filters', pill);
+                activeFilters.days = pill.dataset.days;
+                applyFilters();
+            });
+        });
+
+        // Clear filters button
+        document.getElementById('clear-filters').addEventListener('click', () => {
+            activeFilters = { site: 'all', type: 'all', remote: 'all', days: 'all' };
+            document.querySelectorAll('.filter-pill').forEach(pill => {
+                pill.classList.remove('active');
+            });
+            document.querySelectorAll('[data-site="all"], [data-type="all"], [data-remote="all"], [data-days="all"]').forEach(pill => {
+                pill.classList.add('active');
+            });
+            applyFilters();
+        });
+    }
+
+    function setActiveFilter(selector, activePill) {
+        document.querySelectorAll(`${selector} .filter-pill`).forEach(pill => {
+            pill.classList.remove('active');
+        });
+        activePill.classList.add('active');
+    }
+
+    function applyFilters() {
+        let filteredJobs = [...allJobs];
+
+        // Filter by site
+        if (activeFilters.site !== 'all') {
+            filteredJobs = filteredJobs.filter(job => job.site === activeFilters.site);
+        }
+
+        // Filter by type
+        if (activeFilters.type !== 'all') {
+            filteredJobs = filteredJobs.filter(job => {
+                const jobType = (job.job_type || '').toLowerCase();
+                return jobType.includes(activeFilters.type);
+            });
+        }
+
+        // Filter by remote
+        if (activeFilters.remote !== 'all') {
+            const isRemoteFilter = activeFilters.remote === 'true';
+            filteredJobs = filteredJobs.filter(job => job.is_remote === isRemoteFilter);
+        }
+
+        // Filter by date
+        if (activeFilters.days !== 'all') {
+            const daysAgo = parseInt(activeFilters.days);
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+
+            filteredJobs = filteredJobs.filter(job => {
+                if (!job.date_posted) return false;
+                const jobDate = new Date(job.date_posted);
+                return jobDate >= cutoffDate;
+            });
+        }
+
+        renderJobs(filteredJobs);
+    }
+
     function renderJobs(jobs) {
         resultsContainer.innerHTML = '';
 
         if (!jobs || jobs.length === 0) {
-            resultsContainer.innerHTML = '<p style="text-align:center; width:100%; color: var(--text-secondary);">No jobs found. Try a different keyword.</p>';
+            resultsContainer.innerHTML = '<p style="text-align:center; width:100%; color: var(--text-secondary);">No jobs found matching your filters. Try adjusting your criteria.</p>';
             return;
         }
 
@@ -50,7 +171,20 @@ document.addEventListener('DOMContentLoaded', () => {
             card.className = 'job-card';
 
             const title = job.title || 'Untitled Job';
-            const company = job.company || 'Unknown Company';
+
+            // Extract domain from job URL if company name is missing
+            let company = job.company;
+            if (!company && job.job_url) {
+                try {
+                    const urlObj = new URL(job.job_url);
+                    company = urlObj.hostname.replace('www.', '');
+                } catch (e) {
+                    company = 'Company';
+                }
+            } else if (!company) {
+                company = 'Company';
+            }
+
             const location = job.location || 'Remote / Unknown';
             const type = job.job_type || 'Full-time';
             const posted = job.date_posted ? new Date(job.date_posted).toLocaleDateString() : 'Recently';

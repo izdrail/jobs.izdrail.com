@@ -31,6 +31,56 @@
         </div>
     </header>
 
+    <!-- Filters Section -->
+    <section class="filters-section" id="filters-section" style="display: none;">
+        <div class="filters-container">
+            <div class="filter-group">
+                <label class="filter-label">Job Sites</label>
+                <div class="filter-pills" id="site-filters">
+                    <button class="filter-pill active" data-site="all">All Sites</button>
+                    <button class="filter-pill" data-site="indeed">Indeed</button>
+                    <button class="filter-pill" data-site="linkedin">LinkedIn</button>
+                    <button class="filter-pill" data-site="glassdoor">Glassdoor</button>
+                    <button class="filter-pill" data-site="the_guardian">The Guardian</button>
+                    <button class="filter-pill" data-site="cv_library">CV Library</button>
+                    <button class="filter-pill" data-site="builtin">Builtin</button>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Job Type</label>
+                <div class="filter-pills" id="type-filters">
+                    <button class="filter-pill active" data-type="all">All Types</button>
+                    <button class="filter-pill" data-type="full-time">Full-time</button>
+                    <button class="filter-pill" data-type="part-time">Part-time</button>
+                    <button class="filter-pill" data-type="contract">Contract</button>
+                    <button class="filter-pill" data-type="internship">Internship</button>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Remote</label>
+                <div class="filter-pills">
+                    <button class="filter-pill active" data-remote="all" id="remote-all">All Jobs</button>
+                    <button class="filter-pill" data-remote="true" id="remote-only">Remote Only</button>
+                    <button class="filter-pill" data-remote="false" id="remote-onsite">On-site Only</button>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label class="filter-label">Posted</label>
+                <div class="filter-pills" id="date-filters">
+                    <button class="filter-pill active" data-days="all">Any Time</button>
+                    <button class="filter-pill" data-days="1">Last 24 Hours</button>
+                    <button class="filter-pill" data-days="7">Last Week</button>
+                    <button class="filter-pill" data-days="30">Last Month</button>
+                </div>
+            </div>
+
+            <button class="clear-filters-btn" id="clear-filters">Clear All Filters</button>
+        </div>
+    </section>
+
     <main id="results-container">
         <!-- Job cards will be injected here -->
         <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding-top: 2rem;">
