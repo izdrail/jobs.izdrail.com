@@ -1,8 +1,9 @@
 import asyncio
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.endpoints import jobs
 
@@ -35,11 +36,13 @@ app.add_middleware(
 # Endpoints
 app.include_router(jobs.router)
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/")
 async def root():
-    return {"data": "You can try the latest API endpoint here -> https://jobs.izdrail.com/docs"}
+    return FileResponse('static/index.html')
 
 # This line is removed as it was causing the issue
 # loop = asyncio.get_event_loop()

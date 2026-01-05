@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jobs.Izdrail - Find Your Next Dream Job</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+    <header>
+        <h1>Find Your Next Journey</h1>
+        <p class="subtitle">Aggregating jobs from Indeed, LinkedIn, Glassdoor, The Guardian, CV Library, and Builtin.
+        </p>
+
+        <div class="search-container">
+            <form id="search-form" class="search-box">
+                <input type="text" id="search-input" placeholder="Job title, keywords, or company..." required
+                    autofocus>
+                <button type="submit" class="search-btn">Search Jobs</button>
+            </form>
+        </div>
+    </header>
+
+    <main id="results-container">
+        <!-- Job cards will be injected here -->
+        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding-top: 2rem;">
+            Start typing to search for jobs...
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
