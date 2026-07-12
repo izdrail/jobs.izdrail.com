@@ -52,6 +52,7 @@ async def search_jobs(jobSearch: JobsSearch, db: Session = Depends(get_db)):
                 "cv_library",
                 "builtin",
                 "findwork",
+                "jobicy",
             ],
             search_term=jobSearch.keyword,
             description_format="html",

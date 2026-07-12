@@ -21,6 +21,7 @@ from .scrapers.theguardian import TheGuardianScraper
 from .scrapers.cvlibrary import CVLibraryScraper
 from .scrapers.builtin import BuiltinScraper
 from .scrapers.findwork import FindworkScraper
+from .scrapers.jobicy import JobicyScraper
 
 
 def scrape_jobs(
@@ -56,6 +57,7 @@ def scrape_jobs(
         Site.CV_LIBRARY: CVLibraryScraper,
         Site.BUILTIN: BuiltinScraper,
         Site.FINDWORK: FindworkScraper,
+        Site.JOBICY: JobicyScraper,
     }
     set_logger_level(verbose)
 
