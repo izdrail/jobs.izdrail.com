@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
 import { tap, map, catchError } from 'rxjs/operators';
 import { Job, JobApplication, ApplicationStatus } from '../models/job.model';
 import { AuthService } from './auth.service';
@@ -54,10 +54,10 @@ export class ApplicationService {
     this.http.get<ServerApplication[]>(`${this.apiUrl}/applications`).pipe(
       catchError(() => of([]))
     ).subscribe(apps => {
-      const mapped = apps.map(a => this.mapServerApp(a));
+      const mapped = apps.map((a: ServerApplication) => this.mapServerApp(a));
       this.applicationsSubject.next(mapped);
       this.appliedJobUrls.clear();
-      mapped.forEach(a => this.appliedJobUrls.add(a.job.job_url));
+      mapped.forEach((a: JobApplication) => this.appliedJobUrls.add(a.job.job_url));
       this.loaded = true;
     });
   }

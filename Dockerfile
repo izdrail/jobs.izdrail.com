@@ -40,7 +40,14 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
     -p https://github.com/zsh-users/zsh-autosuggestions \
     -p https://github.com/zsh-users/zsh-completions
 
+# Install frontend dependencies (cached layer)
+COPY ./frontend/package.json ./frontend/package-lock.json /home/osint/frontend/
+RUN cd /home/osint/frontend && npm ci
+
 COPY . .
+
+# Build frontend for production
+RUN cd /home/osint/frontend && npm run build:prod
 
 # Supervisord configuration
 COPY docker/supervisord.conf /etc/supervisord.conf

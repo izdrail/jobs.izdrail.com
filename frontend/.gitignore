@@ -12,7 +12,9 @@ $RECYCLE.BIN/
 *.log
 log.txt
 
-
+# IDE
+.idea
+.vscode
 /.sourcemaps
 /.versions
 /coverage
