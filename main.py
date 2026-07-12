@@ -5,7 +5,8 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from api.endpoints import jobs
+from api.database import engine, Base
+from api.endpoints import jobs, auth, swipes, applications
 
 
 app = FastAPI(
@@ -32,11 +33,16 @@ app.add_middleware(
     allow_credentials=True,
 )
 
+Base.metadata.create_all(bind=engine)
+
 # Endpoints
 app.include_router(jobs.router)
+app.include_router(auth.router)
+app.include_router(swipes.router)
+app.include_router(applications.router)
 
 # Path to Angular build
-ANGULAR_BUILD_PATH = os.path.join(os.path.dirname(__file__), "mobile", "www")
+ANGULAR_BUILD_PATH = os.path.join(os.path.dirname(__file__), "frontend", "www")
 
 # Serve Angular static assets
 for subdir in ("assets", "icons", "svg"):

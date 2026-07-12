@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ToastController } from '@ionic/angular';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
 
@@ -95,8 +96,9 @@ export class AuthPage implements OnInit {
         },
         error: async (err) => {
           this.loading = false;
+          const message = err.error?.detail || err.message || 'Sign up failed. Please try again.';
           const toast = await this.toastController.create({
-            message: err.message || 'Sign up failed. Please try again.',
+            message,
             duration: 3000,
             color: 'danger',
             position: 'bottom'
@@ -120,8 +122,9 @@ export class AuthPage implements OnInit {
         },
         error: async (err) => {
           this.loading = false;
+          const message = err.error?.detail || err.message || 'Login failed. Please try again.';
           const toast = await this.toastController.create({
-            message: err.message || 'Login failed. Please try again.',
+            message,
             duration: 3000,
             color: 'danger',
             position: 'bottom'

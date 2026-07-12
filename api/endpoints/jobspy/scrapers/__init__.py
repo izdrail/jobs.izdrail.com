@@ -18,6 +18,7 @@ class Site(Enum):
     THE_GUARDIAN = "the_guardian"
     CV_LIBRARY = "cv_library"
     BUILTIN = "builtin"
+    FINDWORK = "findwork"
 
 
 class ScraperInput(BaseModel):

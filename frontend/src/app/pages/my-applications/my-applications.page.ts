@@ -62,7 +62,7 @@ export class MyApplicationsPage implements OnInit {
           text: 'Remove',
           role: 'destructive',
           handler: () => {
-            this.applicationService.removeApplication(application.id);
+            this.applicationService.removeApplication(application.id).subscribe();
           }
         }
       ]

@@ -4,6 +4,7 @@
 
 export const environment = {
   production: false,
+  apiUrl: 'http://localhost:1603/api/v1',
   iaptic: {
     publicKey: 'YOUR_IAPTIC_PUBLIC_KEY',
     appName: 'jobswipe'

@@ -20,6 +20,8 @@ from .scrapers.exceptions import (
 from .scrapers.theguardian import TheGuardianScraper
 from .scrapers.cvlibrary import CVLibraryScraper
 from .scrapers.builtin import BuiltinScraper
+from .scrapers.findwork import FindworkScraper
+
 
 def scrape_jobs(
     site_name: str | list[str] | Site | list[Site] | None = None,
@@ -53,6 +55,7 @@ def scrape_jobs(
         Site.THE_GUARDIAN: TheGuardianScraper,
         Site.CV_LIBRARY: CVLibraryScraper,
         Site.BUILTIN: BuiltinScraper,
+        Site.FINDWORK: FindworkScraper,
     }
     set_logger_level(verbose)
 

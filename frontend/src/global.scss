@@ -54,6 +54,15 @@ ion-menu {
   }
 }
 
+ion-split-pane {
+  --side-min-width: 280px;
+  --side-max-width: 280px;
+
+  ion-menu {
+    border-right: 1px solid var(--border-color);
+  }
+}
+
 ion-card {
   --background: var(--card-bg);
   --color: var(--text-primary);
