@@ -6,6 +6,6 @@ services:
     image: izdrail/jobs.izdrail.com:latest
     restart: always
     ports:
-      - "8003:8003"
+      - "1603:1603"
     volumes:
       - .:/home/osint/

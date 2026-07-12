@@ -1,0 +1,71 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>About</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div class="about-container">
+    <div class="about-header">
+      <div class="logo">
+        <ion-icon name="flash"></ion-icon>
+      </div>
+      <h1>JobSwipe</h1>
+      <p class="tagline">Find your dream job with a swipe</p>
+      <span class="version">v{{ appVersion }}</span>
+    </div>
+
+    <div class="about-section">
+      <h3>How it works</h3>
+      <div class="feature-list">
+        <div class="feature-item">
+          <div class="feature-icon swipe-right">
+            <ion-icon name="arrow-forward"></ion-icon>
+          </div>
+          <div class="feature-text">
+            <h4>Swipe Right</h4>
+            <p>Apply for a job you like</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon swipe-left">
+            <ion-icon name="arrow-back"></ion-icon>
+          </div>
+          <div class="feature-text">
+            <h4>Swipe Left</h4>
+            <p>Skip the job</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon tap">
+            <ion-icon name="finger-print"></ion-icon>
+          </div>
+          <div class="feature-text">
+            <h4>Tap Card</h4>
+            <p>View full job details</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="about-section">
+      <h3>Powered by</h3>
+      <div class="tech-stack">
+        <span class="tech-badge">Ionic</span>
+        <span class="tech-badge">Angular</span>
+        <span class="tech-badge">Capacitor</span>
+        <span class="tech-badge">TypeScript</span>
+      </div>
+    </div>
+
+    <div class="about-footer">
+      <p>Built with <ion-icon name="heart" color="danger"></ion-icon> for developers</p>
+      <p class="link">
+        <a href="https://jobs.izdrail.com" target="_blank">jobs.izdrail.com</a>
+      </p>
+    </div>
+  </div>
+</ion-content>

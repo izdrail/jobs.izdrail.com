@@ -47,7 +47,7 @@ COPY docker/supervisord.conf /etc/supervisord.conf
 
 
 # Expose application port
-EXPOSE 8003
+EXPOSE 1603
 
 # Run application
 ENTRYPOINT ["supervisord", "-c", "/etc/supervisord.conf", "-n"]

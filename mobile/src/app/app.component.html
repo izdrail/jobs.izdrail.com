@@ -1,0 +1,88 @@
+<ion-menu contentId="main-content" side="start" type="overlay">
+  <ion-header>
+    <ion-toolbar>
+      <ion-title>
+        <div class="menu-header">
+          <div class="logo-container">
+            <ion-icon name="flash" color="primary"></ion-icon>
+          </div>
+          <div class="brand">
+            <span class="brand-name">JobSwipe</span>
+            <span class="brand-tagline">Find your next role</span>
+          </div>
+        </div>
+      </ion-title>
+    </ion-toolbar>
+  </ion-header>
+  <ion-content>
+    <!-- User Info / Auth Buttons -->
+    <div class="user-section" *ngIf="isLoggedIn$ | async; else guestSection">
+      <div class="user-info">
+        <div class="user-avatar">
+          <span>{{ (userService.displayName$ | async)?.charAt(0) || '?' }}</span>
+        </div>
+        <div class="user-details">
+          <span class="user-name">{{ userService.displayName$ | async }}</span>
+          <span class="user-status subscription-badge" [ngClass]="'status-' + (subscriptionStatus$ | async)">
+            {{ (subscriptionStatus$ | async) === 'trial' ? 'Free Trial' : ((subscriptionStatus$ | async) === 'active' ? 'Premium' : '') }}
+          </span>
+        </div>
+      </div>
+    </div>
+    <ng-template #guestSection>
+      <div class="guest-section">
+        <div class="guest-avatar">
+          <ion-icon name="person-outline"></ion-icon>
+        </div>
+        <div class="guest-text">
+          <span class="guest-title">Guest User</span>
+          <span class="guest-subtitle">Sign in to apply for jobs</span>
+        </div>
+        <ion-button fill="solid" size="small" color="primary" (click)="navigateToAuth('signup')">
+          Sign Up
+        </ion-button>
+      </div>
+    </ng-template>
+
+    <ion-list lines="none">
+      <ion-menu-toggle auto-hide="false" *ngFor="let item of menuItems">
+        <ion-item
+          [class.item-active]="isActive(item.url)"
+          (click)="navigateTo(item.url)"
+          button
+          detail="false"
+        >
+          <ion-icon
+            [name]="isActive(item.url) ? item.activeIcon : item.icon"
+            slot="start"
+          ></ion-icon>
+          <ion-label>{{ item.title }}</ion-label>
+        </ion-item>
+      </ion-menu-toggle>
+    </ion-list>
+  </ion-content>
+  <ion-footer>
+    <ion-toolbar>
+      <ion-item lines="none" detail="false">
+        <ion-label class="version-label">
+          <span>JobSwipe v1.0.0</span>
+          <span class="subtitle">Built with Ionic</span>
+        </ion-label>
+        <ion-button
+          *ngIf="isLoggedIn$ | async"
+          fill="clear"
+          size="small"
+          color="danger"
+          (click)="logout()"
+          slot="end"
+        >
+          <ion-icon name="log-out-outline" slot="start"></ion-icon>
+          Logout
+        </ion-button>
+      </ion-item>
+    </ion-toolbar>
+  </ion-footer>
+</ion-menu>
+
+<ion-router-outlet id="main-content"></ion-router-outlet>
+<app-install-banner></app-install-banner>

@@ -1,0 +1,158 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/home" text=""></ion-back-button>
+    </ion-buttons>
+    <ion-title>Job Details</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="openOriginalJob()" *ngIf="job">
+        <ion-icon name="open-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <!-- Loading -->
+  <div *ngIf="loading" class="loading-container">
+    <ion-spinner name="crescent" color="primary"></ion-spinner>
+  </div>
+
+  <!-- Not Found -->
+  <div *ngIf="!loading && !job" class="empty-state">
+    <ion-icon name="alert-circle-outline"></ion-icon>
+    <h2>Job Not Found</h2>
+    <p>This job listing could not be found or may have been removed.</p>
+    <ion-button (click)="goBack()" fill="outline" color="primary">Go Back</ion-button>
+  </div>
+
+  <!-- Job Content -->
+  <div *ngIf="!loading && job" class="job-detail">
+    <div class="detail-header">
+      <div class="company-avatar" [style.background]="getCompanyColor()">
+        <span *ngIf="!job.logo_photo_url">{{ getCompanyInitial() }}</span>
+        <img *ngIf="job.logo_photo_url" [src]="job.logo_photo_url" [alt]="job.company || ''">
+      </div>
+      <div class="title-section">
+        <h1>{{ job.title }}</h1>
+        <div class="company-row">
+          <span class="company-name">{{ job.company || 'Unknown Company' }}</span>
+          <span *ngIf="job.company_industry" class="industry">{{ job.company_industry }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-meta">
+      <div class="meta-card" *ngIf="job.location">
+        <ion-icon name="location-outline"></ion-icon>
+        <div>
+          <span class="meta-label">Location</span>
+          <span class="meta-value">{{ job.location }}</span>
+        </div>
+      </div>
+      <div class="meta-card" *ngIf="job.job_type">
+        <ion-icon name="briefcase-outline"></ion-icon>
+        <div>
+          <span class="meta-label">Type</span>
+          <span class="meta-value">{{ job.job_type }}</span>
+        </div>
+      </div>
+      <div class="meta-card" *ngIf="job.is_remote">
+        <ion-icon name="globe-outline"></ion-icon>
+        <div>
+          <span class="meta-label">Work</span>
+          <span class="meta-value">Remote</span>
+        </div>
+      </div>
+      <div class="meta-card" *ngIf="formatSalary()">
+        <ion-icon name="cash-outline"></ion-icon>
+        <div>
+          <span class="meta-label">Salary</span>
+          <span class="meta-value">{{ formatSalary() }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-tags" *ngIf="getTechnologies().length > 0">
+      <h3>Technologies</h3>
+      <div class="tags-wrap">
+        <span *ngFor="let tech of getTechnologies()" class="tag-chip">{{ tech }}</span>
+      </div>
+    </div>
+
+    <div class="detail-description">
+      <h3>Description</h3>
+      <div class="description-content" [innerHTML]="job.description"></div>
+    </div>
+
+    <div class="company-details" *ngIf="job.company_description">
+      <h3>About the Company</h3>
+      <p>{{ job.company_description }}</p>
+      <div class="company-stats">
+        <span *ngIf="job.company_num_employees">
+          <ion-icon name="people-outline"></ion-icon>
+          {{ job.company_num_employees }} employees
+        </span>
+        <span *ngIf="job.company_revenue">
+          <ion-icon name="trending-up-outline"></ion-icon>
+          {{ job.company_revenue }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <ion-footer *ngIf="!loading && job" class="ion-no-border">
+    <ion-toolbar>
+      <div class="footer-actions">
+        <!-- Not logged in -->
+        <ion-button
+          *ngIf="!isLoggedIn"
+          expand="block"
+          (click)="goToLogin()"
+          color="primary"
+          class="apply-btn"
+        >
+          <ion-icon name="log-in-outline" slot="start"></ion-icon>
+          Sign In to Apply
+        </ion-button>
+
+        <!-- Logged in but subscription expired -->
+        <ion-button
+          *ngIf="isLoggedIn && !canApply && !alreadyApplied"
+          expand="block"
+          color="warning"
+          class="apply-btn"
+        >
+          <ion-icon name="card-outline" slot="start"></ion-icon>
+          Subscribe to Apply
+        </ion-button>
+
+        <!-- Logged in and can apply -->
+        <ion-button
+          *ngIf="isLoggedIn && canApply && !alreadyApplied"
+          expand="block"
+          [disabled]="applying"
+          (click)="apply()"
+          color="primary"
+          class="apply-btn"
+        >
+          <ion-spinner *ngIf="applying" name="crescent" slot="start"></ion-spinner>
+          <ion-icon *ngIf="!applying" name="heart" slot="start"></ion-icon>
+          {{ applying ? 'Applying...' : 'Apply Now' }}
+        </ion-button>
+
+        <!-- Already applied -->
+        <ion-button
+          *ngIf="alreadyApplied"
+          expand="block"
+          [disabled]="true"
+          color="medium"
+          class="apply-btn"
+        >
+          <ion-icon name="checkmark-circle" slot="start"></ion-icon>
+          Already Applied
+        </ion-button>
+      </div>
+    </ion-toolbar>
+  </ion-footer>
+</ion-content>

@@ -1,0 +1,59 @@
+<!-- Rate Us Banner (Native) -->
+<div *ngIf="showBanner && isNative" class="install-banner rate-banner">
+  <div class="banner-content">
+    <div class="banner-icon">
+      <ion-icon name="star" color="warning"></ion-icon>
+    </div>
+    <div class="banner-text">
+      <h3>Rate JobSwipe</h3>
+      <p>Enjoying the app? Leave us a rating!</p>
+    </div>
+    <div class="banner-actions">
+      <ion-button fill="clear" size="small" (click)="dismiss()">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+      <ion-button fill="solid" size="small" color="warning" (click)="rateUs()">
+        Rate Us
+      </ion-button>
+    </div>
+  </div>
+</div>
+
+<!-- Install Banner (Web/PWA) -->
+<div *ngIf="showBanner && !isNative" class="install-banner">
+  <div class="banner-content">
+    <div class="banner-icon">
+      <ion-icon name="flash" color="primary"></ion-icon>
+    </div>
+    <div class="banner-text">
+      <h3>Install JobSwipe</h3>
+      <p>Add to your home screen for quick access</p>
+    </div>
+    <div class="banner-actions">
+      <ion-button fill="clear" size="small" (click)="dismiss()">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+      <ion-button fill="solid" size="small" color="primary" (click)="install()">
+        Install
+      </ion-button>
+    </div>
+  </div>
+</div>
+
+<!-- Update Banner -->
+<div *ngIf="showUpdateBanner" class="update-banner">
+  <div class="banner-content">
+    <div class="banner-icon update">
+      <ion-icon name="arrow-up-circle" color="primary"></ion-icon>
+    </div>
+    <div class="banner-text">
+      <h3>Update Available</h3>
+      <p>A new version is ready to install</p>
+    </div>
+    <div class="banner-actions">
+      <ion-button fill="solid" size="small" color="primary" (click)="updateApp()">
+        Update
+      </ion-button>
+    </div>
+  </div>
+</div>

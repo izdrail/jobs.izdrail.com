@@ -1,0 +1,78 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/home" text=""></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{ mode === 'signup' ? 'Create Account' : 'Welcome Back' }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div class="auth-container">
+    <div class="auth-header">
+      <div class="auth-logo">
+        <ion-icon name="flash" color="primary"></ion-icon>
+      </div>
+      <h1>{{ mode === 'signup' ? 'Join JobSwipe' : 'Welcome Back' }}</h1>
+      <p *ngIf="mode === 'signup'">Create an account to start applying for jobs</p>
+      <p *ngIf="mode === 'login'">Sign in to continue your job search</p>
+    </div>
+
+    <form (ngSubmit)="submit()" class="auth-form">
+      <ion-item *ngIf="mode === 'signup'" lines="none" class="auth-input">
+        <ion-input
+          label="Display Name"
+          labelPlacement="floating"
+          [(ngModel)]="displayName"
+          name="displayName"
+          placeholder="Your name"
+          [disabled]="loading"
+        ></ion-input>
+      </ion-item>
+
+      <ion-item lines="none" class="auth-input">
+        <ion-input
+          label="Email"
+          labelPlacement="floating"
+          type="email"
+          [(ngModel)]="email"
+          name="email"
+          placeholder="you@example.com"
+          [disabled]="loading"
+          required
+        ></ion-input>
+      </ion-item>
+
+      <ion-item lines="none" class="auth-input">
+        <ion-input
+          label="Password"
+          labelPlacement="floating"
+          type="password"
+          [(ngModel)]="password"
+          name="password"
+          placeholder="At least 6 characters"
+          [disabled]="loading"
+          required
+        ></ion-input>
+      </ion-item>
+
+      <ion-button
+        expand="block"
+        type="submit"
+        [disabled]="loading"
+        class="auth-submit"
+        color="primary"
+      >
+        <ion-spinner *ngIf="loading" name="crescent" slot="start"></ion-spinner>
+        {{ loading ? 'Please wait...' : (mode === 'signup' ? 'Create Account' : 'Sign In') }}
+      </ion-button>
+    </form>
+
+    <div class="auth-switch">
+      <span>{{ mode === 'signup' ? 'Already have an account?' : "Don't have an account?" }}</span>
+      <ion-button fill="clear" color="primary" (click)="switchMode()">
+        {{ mode === 'signup' ? 'Sign In' : 'Sign Up' }}
+      </ion-button>
+    </div>
+  </div>
+</ion-content>

@@ -1,0 +1,162 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>
+      <div class="header-title">
+        <ion-icon name="flash" color="primary"></ion-icon>
+        <span>JobSwipe</span>
+      </div>
+    </ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="loadJobs()" [disabled]="loading">
+        <ion-icon name="refresh-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-container">
+    <div class="skeleton-card">
+      <div class="skeleton-header">
+        <div class="skeleton-avatar skeleton"></div>
+        <div class="skeleton-lines">
+          <div class="skeleton skeleton-line long"></div>
+          <div class="skeleton skeleton-line short"></div>
+        </div>
+      </div>
+      <div class="skeleton-body">
+        <div class="skeleton skeleton-line full"></div>
+        <div class="skeleton skeleton-line full"></div>
+        <div class="skeleton skeleton-line medium"></div>
+      </div>
+      <div class="skeleton-tags">
+        <div class="skeleton skeleton-tag"></div>
+        <div class="skeleton skeleton-tag"></div>
+        <div class="skeleton skeleton-tag"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No More Jobs -->
+  <div *ngIf="!loading && noMoreJobs" class="empty-state">
+    <ion-icon name="sparkles-outline"></ion-icon>
+    <h2>All caught up!</h2>
+    <p>You've seen all available jobs. Pull down to refresh or check back later.</p>
+    <ion-button (click)="loadJobs()" fill="outline" color="primary">
+      <ion-icon name="refresh-outline" slot="start"></ion-icon>
+      Reload Jobs
+    </ion-button>
+  </div>
+
+  <!-- Card Stack -->
+  <div *ngIf="!loading && !noMoreJobs" class="card-stack">
+    <div
+      *ngFor="let job of visibleJobs; trackBy: trackByJob; let i = index"
+      class="job-card"
+      [style]="getCardStyle(currentIndex + i)"
+      [style.z-index]="MAX_VISIBLE - i"
+      (pointerdown)="onPointerDown($event, currentIndex + i)"
+      (pointermove)="onPointerMove($event, currentIndex + i)"
+      (pointerup)="onPointerUp($event, currentIndex + i)"
+      (click)="openJobDetails(job)"
+    >
+      <div class="swipe-indicator like" [style.opacity]="getLikeOpacity(currentIndex + i)">APPLY</div>
+      <div class="swipe-indicator nope" [style.opacity]="getNopeOpacity(currentIndex + i)">SKIP</div>
+
+      <div class="card-content">
+        <div class="card-header">
+          <div class="company-avatar" [style.background]="getCompanyColor(job)">
+            <span *ngIf="!job.logo_photo_url">{{ getCompanyInitial(job) }}</span>
+            <img *ngIf="job.logo_photo_url" [src]="job.logo_photo_url" [alt]="job.company || ''">
+          </div>
+          <div class="card-title-section">
+            <h2 class="job-title">{{ job.title }}</h2>
+            <div class="company-info">
+              <span class="company-name">{{ job.company || 'Unknown Company' }}</span>
+              <span *ngIf="job.location" class="location">
+                <ion-icon name="location-outline"></ion-icon>
+                {{ job.location }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="salary-badge" *ngIf="formatSalary(job)">
+          <ion-icon name="cash-outline"></ion-icon>
+          {{ formatSalary(job) }}
+        </div>
+
+        <p class="job-description">{{ job.description }}</p>
+
+        <div class="card-tags">
+          <span *ngFor="let tech of getTechnologies(job)" class="tag-chip">{{ tech }}</span>
+        </div>
+
+        <div class="card-meta">
+          <span *ngIf="job.job_type" class="meta-item">
+            <ion-icon name="briefcase-outline"></ion-icon>
+            {{ job.job_type }}
+          </span>
+          <span *ngIf="job.is_remote" class="meta-item remote">
+            <ion-icon name="globe-outline"></ion-icon>
+            Remote
+          </span>
+          <span *ngIf="job.site" class="meta-item source">
+            via {{ job.site }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div *ngIf="!loading && !noMoreJobs && visibleJobs.length > 0" class="action-buttons">
+    <ion-button
+      class="action-btn skip"
+      (click)="swipe('left')"
+      [disabled]="applying"
+      fill="outline"
+      shape="round"
+    >
+      <ion-icon name="close" slot="icon-only"></ion-icon>
+    </ion-button>
+    <ion-button
+      class="action-btn info"
+      (click)="openJobDetails(visibleJobs[0])"
+      fill="outline"
+      shape="round"
+    >
+      <ion-icon name="information-circle" slot="icon-only"></ion-icon>
+    </ion-button>
+    <ion-button
+      class="action-btn apply"
+      (click)="swipe('right')"
+      [disabled]="applying"
+      fill="solid"
+      shape="round"
+    >
+      <ion-icon name="heart" slot="icon-only"></ion-icon>
+    </ion-button>
+  </div>
+
+  <!-- Applying overlay -->
+  <div *ngIf="applying" class="applying-overlay">
+    <div class="applying-spinner">
+      <ion-spinner name="crescent" color="primary"></ion-spinner>
+      <span>Applying...</span>
+    </div>
+  </div>
+
+  <!-- Card Counter -->
+  <div *ngIf="!loading && !noMoreJobs && jobs.length > 0" class="card-counter">
+    {{ currentIndex + 1 }} / {{ jobs.length }}
+  </div>
+</ion-content>
