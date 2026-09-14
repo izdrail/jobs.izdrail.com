@@ -20,15 +20,6 @@
     </ion-list-header>
 
     <ng-container *ngIf="isLoggedIn; else guestAccount">
-      <ion-item detail="false" class="settings-item">
-        <ion-icon name="person-outline" slot="start" color="primary"></ion-icon>
-        <ion-label>
-          <h2>Signed In</h2>
-          <p>{{ getSubscriptionLabel() }}</p>
-        </ion-label>
-      </ion-item>
-
-      <!-- Subscription Status -->
       <ion-item detail="false" class="settings-item subscription-item" [ngClass]="'status-' + subscriptionStatus">
         <ion-icon name="card-outline" slot="start" [color]="subscriptionStatus === 'active' ? 'success' : (subscriptionStatus === 'trial' ? 'warning' : 'danger')"></ion-icon>
         <ion-label>
@@ -69,6 +60,7 @@
           <h2>Restore Purchases</h2>
           <p>Restore your subscription if you reinstalled</p>
         </ion-label>
+        <ion-spinner *ngIf="restoring" name="crescent" slot="end"></ion-spinner>
       </ion-item>
 
       <ion-item button detail="false" class="settings-item" (click)="logout()">
@@ -89,6 +81,86 @@
       </ion-item>
     </ng-template>
 
+    <!-- Profile -->
+    <ng-container *ngIf="isLoggedIn && profile">
+      <ion-list-header>
+        <ion-label>Profile</ion-label>
+      </ion-list-header>
+
+      <ion-item detail="false" class="settings-item">
+        <ion-input
+          label="Desired role"
+          labelPlacement="stacked"
+          [(ngModel)]="profile.desiredRole"
+          placeholder="e.g. Backend Engineer"
+          maxlength="120"
+        ></ion-input>
+      </ion-item>
+
+      <ion-item detail="false" class="settings-item">
+        <ion-input
+          label="Location"
+          labelPlacement="stacked"
+          [(ngModel)]="profile.location"
+          placeholder="e.g. London"
+          maxlength="120"
+        ></ion-input>
+      </ion-item>
+
+      <ion-item detail="false" class="settings-item">
+        <ion-select
+          label="Work preference"
+          labelPlacement="stacked"
+          [(ngModel)]="profile.remotePreference"
+          interface="action-sheet"
+        >
+          <ion-select-option *ngFor="let o of remoteOptions" [value]="o.value">{{ o.label }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <ion-item detail="false" class="settings-item">
+        <ion-input
+          label="Skills (comma separated)"
+          labelPlacement="stacked"
+          [(ngModel)]="skillsInput"
+          placeholder="e.g. Python, FastAPI"
+        ></ion-input>
+      </ion-item>
+
+      <ion-item detail="false" class="settings-item">
+        <ion-icon name="document-outline" slot="start" color="primary"></ion-icon>
+        <ion-label>
+          <h2>Resume</h2>
+          <p *ngIf="profile.resume">
+            {{ profile.resume.originalName }} ({{ formatResumeSize(profile.resume.size) }})
+          </p>
+          <p *ngIf="!profile.resume">PDF, DOC, DOCX, TXT or MD, up to 5 MB</p>
+        </ion-label>
+        <ion-button *ngIf="!uploadingResume" slot="end" size="small" fill="outline" (click)="resumeInput.click()">
+          {{ profile.resume ? 'Replace' : 'Upload' }}
+        </ion-button>
+        <ion-spinner *ngIf="uploadingResume" name="crescent" slot="end"></ion-spinner>
+        <ion-button
+          *ngIf="profile.resume && !uploadingResume"
+          slot="end"
+          size="small"
+          fill="clear"
+          color="danger"
+          (click)="deleteResume()"
+          aria-label="Delete resume"
+        >
+          <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+      </ion-item>
+      <input #resumeInput type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden (change)="onResumeSelected($event)">
+
+      <ion-item detail="false" class="settings-item" lines="none">
+        <ion-button expand="block" class="save-profile-btn" [disabled]="savingProfile" (click)="saveProfile()">
+          {{ savingProfile ? 'Saving...' : 'Save Profile' }}
+        </ion-button>
+      </ion-item>
+    </ng-container>
+
     <!-- Preferences -->
     <ion-list-header>
       <ion-label>Preferences</ion-label>
@@ -96,25 +168,28 @@
 
     <ion-item detail="false" class="settings-item">
       <ion-icon name="notifications-outline" slot="start" color="primary"></ion-icon>
-      <ion-label>Push Notifications</ion-label>
-      <ion-toggle [(ngModel)]="notifications" slot="end" color="primary"></ion-toggle>
+      <ion-label>
+        <h2>Push Notifications</h2>
+        <p>Not available yet - delivery is not configured on the server</p>
+      </ion-label>
+      <ion-toggle [disabled]="true" [checked]="false" slot="end" color="primary" aria-label="Push notifications (not available yet)"></ion-toggle>
     </ion-item>
 
     <ion-item detail="false" class="settings-item">
       <ion-icon name="moon-outline" slot="start" color="primary"></ion-icon>
       <ion-label>Dark Mode</ion-label>
-      <ion-toggle [(ngModel)]="darkMode" slot="end" color="primary" disabled></ion-toggle>
+      <ion-toggle [checked]="true" [disabled]="true" slot="end" color="primary" aria-label="Dark mode (always on)"></ion-toggle>
     </ion-item>
 
     <ion-list-header>
       <ion-label>Data</ion-label>
     </ion-list-header>
 
-    <ion-item button detail="false" class="settings-item" (click)="clearApplications()">
+    <ion-item button detail="false" class="settings-item" (click)="clearLocalData()">
       <ion-icon name="trash-outline" slot="start" color="danger"></ion-icon>
       <ion-label>
-        <h2>Clear Application Data</h2>
-        <p>Remove all saved application records</p>
+        <h2>Clear Local Data</h2>
+        <p>Remove cached jobs and queued offline applications from this device</p>
       </ion-label>
     </ion-item>
   </ion-list>

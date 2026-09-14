@@ -51,3 +51,34 @@
   color: white;
   margin-right: 4px;
 }
+
+.app-notes {
+  font-size: 13px;
+  color: var(--ion-color-medium);
+  margin-top: 4px;
+}
+
+.status-badge.syncing {
+  background: rgba(108, 99, 255, 0.15);
+  color: var(--ion-color-primary);
+}
+
+.status-timeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ion-color-medium);
+}
+
+.timeline-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timeline-status {
+  font-weight: 600;
+}

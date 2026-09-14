@@ -39,18 +39,6 @@
         "timeout": "10s",
         "refreshOnIdle": true
       }
-    },
-    {
-      "name": "jobs-api-offline",
-      "urls": [
-        "https://jobs.izdrail.com/api/**"
-      ],
-      "cacheConfig": {
-        "strategy": "performance",
-        "maxSize": 100,
-        "maxAge": "7d",
-        "timeout": "5s"
-      }
     }
   ]
 }

@@ -18,12 +18,23 @@
     <ion-spinner name="crescent" color="primary"></ion-spinner>
   </div>
 
-  <!-- Not Found -->
-  <div *ngIf="!loading && !job" class="empty-state">
+  <!-- Job no longer available -->
+  <div *ngIf="!loading && loadError === 'not-found'" class="empty-state">
     <ion-icon name="alert-circle-outline"></ion-icon>
-    <h2>Job Not Found</h2>
-    <p>This job listing could not be found or may have been removed.</p>
-    <ion-button (click)="goBack()" fill="outline" color="primary">Go Back</ion-button>
+    <h2>Job no longer available</h2>
+    <p>This listing has expired or been removed by the source site.</p>
+    <ion-button (click)="goBack()" fill="outline" color="primary">Back to jobs</ion-button>
+  </div>
+
+  <!-- Network / unexpected error -->
+  <div *ngIf="!loading && loadError === 'network'" class="empty-state">
+    <ion-icon name="cloud-offline-outline"></ion-icon>
+    <h2>Could not load this job</h2>
+    <p>Check your connection and try again.</p>
+    <ion-button (click)="retry()" fill="outline" color="primary">
+      <ion-icon name="refresh-outline" slot="start"></ion-icon>
+      Retry
+    </ion-button>
   </div>
 
   <!-- Job Content -->

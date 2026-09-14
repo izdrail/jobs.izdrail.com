@@ -13,4 +13,4 @@ venv.bak/
 debug_*.html
 .DS_Store
 .idea/
-.vscode/
+.vscode/uploads/

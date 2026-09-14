@@ -1,12 +1,15 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, QueryList } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { ToastController, LoadingController, MenuController, AlertController } from '@ionic/angular';
+import { Capacitor } from '@capacitor/core';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { JobService } from '../../core/services/job.service';
 import { ApplicationService } from '../../core/services/application.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
 import { SwipeTrackingService } from '../../core/services/swipe-tracking.service';
-import { Job } from '../../core/models/job.model';
+import { PwaService } from '../../core/services/pwa.service';
+import { Job, JobFilters, DEFAULT_JOB_FILTERS } from '../../core/models/job.model';
 import { Subscription } from 'rxjs';
 
 interface CardState {
@@ -18,6 +21,16 @@ interface CardState {
   nopeOpacity: number;
 }
 
+interface LastSwipe {
+  job: Job;
+  direction: 'left' | 'right';
+  applicationId: string | null;
+  pendingSync: boolean;
+}
+
+const DEFAULT_KEYWORD = 'software developer';
+const PAGE_SIZE = 20;
+
 @Component({
   selector: 'app-home',
   templateUrl: './home.page.html',
@@ -27,14 +40,38 @@ interface CardState {
 export class HomePage implements OnInit, OnDestroy {
   jobs: Job[] = [];
   loading = true;
+  loadingMore = false;
   applying = false;
   noMoreJobs = false;
+  loadError: string | null = null;
+  isOnline = true;
+  pendingSyncCount = 0;
 
+  keyword = '';
+  filters: JobFilters = { ...DEFAULT_JOB_FILTERS };
+  technologiesInput = '';
+  filtersOpen = false;
+
+  readonly jobTypeOptions = ['Full-time', 'Part-time', 'Contract', 'Internship'];
+  readonly siteOptions = [
+    'indeed', 'linkedin', 'glassdoor', 'the_guardian',
+    'cv_library', 'builtin', 'findwork', 'jobicy'
+  ];
+  readonly datePostedOptions = [
+    { label: 'Any time', value: null },
+    { label: 'Past 24 hours', value: 1 },
+    { label: 'Past week', value: 7 },
+    { label: 'Past month', value: 30 }
+  ];
+
+  private page = 1;
+  private hasMore = false;
   private touchStartX = 0;
   private touchStartY = 0;
   private isDragging = false;
   currentIndex = 0;
   private subscriptions: Subscription[] = [];
+  private lastSwipe: LastSwipe | null = null;
 
   cardStates: CardState[] = [];
 
@@ -47,6 +84,7 @@ export class HomePage implements OnInit, OnDestroy {
     private authService: AuthService,
     private subscriptionService: SubscriptionService,
     private swipeTrackingService: SwipeTrackingService,
+    private pwaService: PwaService,
     private toastController: ToastController,
     private loadingController: LoadingController,
     private alertController: AlertController,
@@ -55,64 +93,157 @@ export class HomePage implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    if (this.jobService.hasCachedJobs()) {
-      this.jobs = this.jobService.getCachedJobs()
-        .filter(j => !this.applicationService.hasApplied(j.job_url));
-      this.initCardStates();
-      this.loading = false;
-      this.loadJobs(true);
-    } else {
-      this.loadJobs(false);
-    }
+    const saved = this.jobService.loadFilters();
+    this.filters = saved.filters;
+    this.keyword = saved.keyword;
+    this.technologiesInput = this.filters.technologies.join(', ');
+
+    this.subscriptions.push(
+      this.pwaService.isOnline$.subscribe(online => {
+        this.isOnline = online;
+      }),
+      this.applicationService.applications$.subscribe(() => {
+        this.pendingSyncCount = this.applicationService.pendingCount;
+      })
+    );
+
+    this.search();
   }
 
   ngOnDestroy() {
     this.subscriptions.forEach(s => s.unsubscribe());
   }
 
-  async loadJobs(silent = false) {
-    if (!silent) {
-      this.loading = true;
-    }
+  /** Start a fresh search (page 1) with the current keyword and filters. */
+  search() {
+    this.page = 1;
+    this.hasMore = false;
+    this.currentIndex = 0;
+    this.jobs = [];
     this.noMoreJobs = false;
+    this.loadError = null;
+    this.loading = true;
 
-    const sub = this.jobService.loadJobs().subscribe({
-      next: (jobs) => {
-        this.jobs = jobs.filter(j => !this.applicationService.hasApplied(j.job_url));
-        this.initCardStates();
+    this.jobService.saveFilters(this.filters, this.keyword);
+
+    const sub = this.jobService.searchJobs({
+      keyword: this.keyword || DEFAULT_KEYWORD,
+      filters: this.filters,
+      page: this.page,
+      pageSize: PAGE_SIZE
+    }).subscribe({
+      next: (result) => {
+        if (result.stale) {
+          return;
+        }
         this.loading = false;
-        if (this.jobs.length === 0) {
+        this.hasMore = result.has_more;
+        this.jobService.mergeIntoCache(result.data);
+        this.jobs = this.dedupe(result.data)
+          .filter(j => !this.applicationService.hasApplied(j.job_url));
+        this.initCardStates();
+        if (this.jobs.length === 0 && !this.hasMore) {
           this.noMoreJobs = true;
         }
       },
-      error: async () => {
+      error: () => {
         this.loading = false;
+        this.loadError = 'Could not load jobs. Check your connection and try again.';
         if (this.jobs.length === 0) {
           this.noMoreJobs = true;
-        }
-        if (!silent) {
-          const toast = await this.toastController.create({
-            message: 'Failed to load jobs. Pull down to retry.',
-            duration: 3000,
-            color: 'danger',
-            position: 'bottom'
-          });
-          await toast.present();
         }
       }
     });
     this.subscriptions.push(sub);
   }
 
+  /** Infinite scroll: fetch the next page of the current search. */
+  loadNextPage(event?: { target: { complete: () => void; disabled: boolean } }) {
+    if (!this.hasMore || this.loading || this.loadingMore) {
+      event?.target.complete();
+      return;
+    }
+    this.loadingMore = true;
+    this.page += 1;
+
+    const sub = this.jobService.searchJobs({
+      keyword: this.keyword || DEFAULT_KEYWORD,
+      filters: this.filters,
+      page: this.page,
+      pageSize: PAGE_SIZE
+    }).subscribe({
+      next: (result) => {
+        this.loadingMore = false;
+        event?.target.complete();
+        if (result.stale) {
+          return;
+        }
+        this.hasMore = result.has_more;
+        this.jobService.mergeIntoCache(result.data);
+        const fresh = this.dedupe(result.data)
+          .filter(j => !this.applicationService.hasApplied(j.job_url))
+          .filter(j => !this.jobs.some(existing => existing.job_url === j.job_url));
+        this.jobs = [...this.jobs, ...fresh];
+        this.initCardStates();
+        if (!this.hasMore) {
+          event && (event.target.disabled = true);
+        }
+      },
+      error: () => {
+        this.loadingMore = false;
+        this.page -= 1;
+        event?.target.complete();
+        this.showToast('Could not load more jobs. Try again.', 'danger');
+      }
+    });
+    this.subscriptions.push(sub);
+  }
+
+  applyFilters() {
+    this.filters.technologies = this.technologiesInput
+      .split(',')
+      .map(t => t.trim())
+      .filter(t => t.length > 0)
+      .slice(0, 10);
+    this.filtersOpen = false;
+    this.search();
+  }
+
+  resetFilters() {
+    this.filters = { ...DEFAULT_JOB_FILTERS };
+    this.technologiesInput = '';
+  }
+
+  get hasActiveFilters(): boolean {
+    return this.filters.isRemote !== null
+      || !!this.filters.jobType
+      || this.filters.minSalary !== null
+      || this.filters.maxSalary !== null
+      || this.filters.datePostedWithinDays !== null
+      || !!this.filters.site
+      || this.filters.technologies.length > 0;
+  }
+
+  private dedupe(jobs: Job[]): Job[] {
+    const seen = new Set<string>();
+    return jobs.filter(j => {
+      if (seen.has(j.job_url)) {
+        return false;
+      }
+      seen.add(j.job_url);
+      return true;
+    });
+  }
+
   initCardStates() {
-    this.cardStates = this.jobs.map(() => ({
+    this.cardStates = this.jobs.map((_, i) => this.cardStates[i] || {
       x: 0,
       y: 0,
       rotation: 0,
       opacity: 1,
       likeOpacity: 0,
       nopeOpacity: 0
-    }));
+    });
   }
 
   get visibleJobs(): Job[] {
@@ -123,7 +254,7 @@ export class HomePage implements OnInit, OnDestroy {
     return this.currentIndex;
   }
 
-  getCardStyle(index: number): any {
+  getCardStyle(index: number): Record<string, string | number> {
     const visibleIndex = index - this.currentIndex;
     const state = this.cardStates[index];
     if (!state) return {};
@@ -206,6 +337,7 @@ export class HomePage implements OnInit, OnDestroy {
     const job = this.jobs[index];
 
     this.swipeTrackingService.trackSwipe(job.job_url, direction);
+    this.triggerHaptics(direction);
 
     if (direction === 'right') {
       if (!this.authService.isLoggedIn) {
@@ -236,7 +368,9 @@ export class HomePage implements OnInit, OnDestroy {
 
       await this.applyToJob(job, index);
     } else {
+      this.lastSwipe = { job, direction, applicationId: null, pendingSync: false };
       this.animateAndAdvance(index, direction);
+      this.showUndoToast(`Skipped ${job.company || job.title}`);
     }
   }
 
@@ -253,33 +387,46 @@ export class HomePage implements OnInit, OnDestroy {
 
     setTimeout(() => {
       this.currentIndex++;
-      if (this.currentIndex >= this.jobs.length) {
+      this.maybePrefetchMore();
+    }, 300);
+  }
+
+  /** Keep the deck fed: fetch the next page when the end is in sight. */
+  private maybePrefetchMore() {
+    if (this.currentIndex >= this.jobs.length) {
+      if (this.hasMore) {
+        this.loadNextPage();
+      } else {
         this.noMoreJobs = true;
       }
-    }, 300);
+    } else if (this.jobs.length - this.currentIndex <= 3 && this.hasMore) {
+      this.loadNextPage();
+    }
   }
 
   async applyToJob(job: Job, index: number) {
     this.applying = true;
 
     const sub = this.applicationService.applyToJob(job).subscribe({
-      next: async () => {
+      next: async (application) => {
         this.applying = false;
+        this.lastSwipe = {
+          job,
+          direction: 'right',
+          applicationId: application.id,
+          pendingSync: application.pendingSync
+        };
         this.animateAndAdvance(index, 'right');
-
-        const toast = await this.toastController.create({
-          message: `Applied to ${job.company || job.title}!`,
-          duration: 2500,
-          color: 'success',
-          position: 'bottom',
-          icon: 'checkmark-circle'
-        });
-        await toast.present();
+        this.showUndoToast(
+          application.pendingSync
+            ? `Queued application to ${job.company || job.title} (syncs when back online)`
+            : `Applied to ${job.company || job.title}!`
+        );
       },
       error: async (err) => {
         this.applying = false;
         const toast = await this.toastController.create({
-          message: err.message || 'Failed to apply. Please try again.',
+          message: err.error?.detail || err.message || 'Failed to apply. Please try again.',
           duration: 3000,
           color: 'danger',
           position: 'bottom'
@@ -290,16 +437,94 @@ export class HomePage implements OnInit, OnDestroy {
     this.subscriptions.push(sub);
   }
 
+  private async showUndoToast(message: string) {
+    const toast = await this.toastController.create({
+      message,
+      duration: 5000,
+      color: 'success',
+      position: 'bottom',
+      icon: 'checkmark-circle',
+      buttons: [
+        {
+          text: 'Undo',
+          role: 'cancel',
+          handler: () => {
+            this.undoLastSwipe();
+          }
+        }
+      ]
+    });
+    await toast.present();
+  }
+
+  /**
+   * Undo the last swipe. Honest server semantics: a queued (offline)
+   * application is removed from the outbox, a synced one is deleted through
+   * the API, and the swipe telemetry record is removed best-effort.
+   */
+  undoLastSwipe() {
+    const last = this.lastSwipe;
+    if (!last) {
+      return;
+    }
+    this.lastSwipe = null;
+
+    if (last.direction === 'right' && last.applicationId) {
+      if (last.pendingSync) {
+        this.applicationService.removePending(last.applicationId);
+      } else {
+        this.applicationService.removeApplication(last.applicationId).subscribe({
+          error: () => this.showToast('Could not undo the application.', 'danger')
+        });
+      }
+    } else if (last.direction === 'left') {
+      this.swipeTrackingService.undoLastSwipe(last.job.job_url).subscribe({
+        error: () => { /* best-effort telemetry */ }
+      });
+    }
+
+    this.restoreCard(last.job);
+  }
+
+  private restoreCard(job: Job) {
+    if (this.currentIndex > 0 && this.jobs[this.currentIndex - 1]?.job_url === job.job_url) {
+      this.currentIndex--;
+      this.cardStates[this.currentIndex] = {
+        x: 0, y: 0, rotation: 0, opacity: 1, likeOpacity: 0, nopeOpacity: 0
+      };
+      this.noMoreJobs = false;
+    }
+  }
+
+  private triggerHaptics(direction: 'left' | 'right') {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+    Haptics.impact({
+      style: direction === 'right' ? ImpactStyle.Medium : ImpactStyle.Light
+    }).catch(() => { /* haptics unavailable */ });
+  }
+
   async openJobDetails(job: Job) {
     this.router.navigate(['/job', encodeURIComponent(job.job_url)]);
   }
 
-  doRefresh(event: any) {
+  doRefresh(event: { target: { complete: () => void } }) {
     this.currentIndex = 0;
-    this.loadJobs();
+    this.search();
     setTimeout(() => {
       event.target.complete();
     }, 1500);
+  }
+
+  private async showToast(message: string, color: string) {
+    const toast = await this.toastController.create({
+      message,
+      duration: 3000,
+      color,
+      position: 'bottom'
+    });
+    await toast.present();
   }
 
   getTechnologies(job: Job): string[] {

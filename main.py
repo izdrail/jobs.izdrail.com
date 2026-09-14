@@ -5,8 +5,17 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from api.database import engine, Base
-from api.endpoints import jobs, auth, swipes, applications
+from api.config import CORS_ORIGINS
+from api.database import engine, Base, run_migrations
+from api.endpoints import (
+    jobs,
+    auth,
+    swipes,
+    applications,
+    billing,
+    devices,
+    profile,
+)
 
 
 app = FastAPI(
@@ -27,19 +36,25 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Native (Capacitor) and local dev origins; production SPA is same-origin.
+    # Override with the JOBSWIPE_CORS_ORIGINS env var (comma-separated).
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,
 )
 
 Base.metadata.create_all(bind=engine)
+run_migrations(engine)
 
 # Endpoints
 app.include_router(jobs.router)
 app.include_router(auth.router)
 app.include_router(swipes.router)
 app.include_router(applications.router)
+app.include_router(billing.router)
+app.include_router(devices.router)
+app.include_router(profile.router)
 
 # Path to Angular build
 ANGULAR_BUILD_PATH = os.path.join(os.path.dirname(__file__), "frontend", "www")

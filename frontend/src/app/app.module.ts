@@ -1,4 +1,4 @@
-import { NgModule, isDevMode } from '@angular/core';
+import { NgModule, APP_INITIALIZER, isDevMode } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { RouteReuseStrategy } from '@angular/router';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
@@ -10,6 +10,11 @@ import { AppComponent } from './app.component';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { InstallBannerModule } from './shared/components/install-banner/install-banner.module';
 import { AuthInterceptor } from './core/interceptors/auth.interceptor';
+import { StorageService } from './core/services/storage.service';
+
+export function initStorage(storage: StorageService) {
+  return () => storage.init();
+}
 
 @NgModule({
   declarations: [AppComponent],
@@ -28,7 +33,13 @@ import { AuthInterceptor } from './core/interceptors/auth.interceptor';
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
-    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true }
+    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: initStorage,
+      deps: [StorageService],
+      multi: true
+    }
   ],
   bootstrap: [AppComponent],
 })

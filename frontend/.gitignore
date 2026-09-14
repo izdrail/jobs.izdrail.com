@@ -70,3 +70,6 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# Capacitor Android project is generated in CI / locally via `npx cap add android`
+/android
