@@ -4,13 +4,19 @@
 
 export const environment = {
   production: false,
+  // Local FastAPI server (python main.py / Docker on port 1603).
   apiUrl: 'http://localhost:1603/api/v1',
-  iaptic: {
-    publicKey: 'YOUR_IAPTIC_PUBLIC_KEY',
-    appName: 'jobswipe'
-  },
-  products: {
-    monthly: 'jobswipe_monthly'
+  // Development-only: JobService may serve mock jobs after an API failure.
+  // Never enabled in production builds.
+  useMockJobsOnError: true,
+  billing: {
+    // 'none' | 'iaptic' | 'revenuecat' - see README "Payments & billing".
+    provider: 'none' as 'none' | 'iaptic' | 'revenuecat',
+    iapticPublicKey: '',
+    iapticAppName: 'jobswipe',
+    products: {
+      monthly: 'jobswipe_monthly'
+    }
   }
 };
 

@@ -1,17 +1,36 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { map, delay, tap } from 'rxjs/operators';
+import { HttpErrorResponse } from '@angular/common/http';
+import { BehaviorSubject, Observable, from, throwError } from 'rxjs';
+import { map, switchMap, tap, catchError } from 'rxjs/operators';
 import { SubscriptionStatus, SubscriptionInfo } from '../models/user.model';
 import { AuthService } from './auth.service';
+import { BillingService } from './billing.service';
+import { StorageService } from './storage.service';
+import { environment } from '../../../environments/environment';
 
-const SUBSCRIPTION_KEY = 'jobswipe_subscription';
-const TRIAL_DURATION_MS = 3 * 24 * 60 * 60 * 1000;
+const SUBSCRIPTION_CACHE_KEY = 'jobswipe_subscription_cache';
 
+const EMPTY_SUBSCRIPTION: SubscriptionInfo = {
+  status: SubscriptionStatus.None,
+  trialStartDate: null,
+  trialEndDate: null,
+  expiresAt: null,
+  productId: null
+};
+
+/**
+ * Subscription state. The backend is the entitlement authority whenever the
+ * user is signed in; the last known entitlement is cached locally only so the
+ * paywall keeps working offline. A cached entitlement never upgrades access -
+ * expiry is always re-evaluated locally against real timestamps.
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class SubscriptionService {
-  private subscriptionSubject = new BehaviorSubject<SubscriptionInfo>(this.loadSubscription());
+  private subscriptionSubject = new BehaviorSubject<SubscriptionInfo>(
+    this.loadCachedSubscription()
+  );
 
   subscription$: Observable<SubscriptionInfo> = this.subscriptionSubject.asObservable();
   status$: Observable<SubscriptionStatus> = this.subscription$.pipe(
@@ -22,102 +41,102 @@ export class SubscriptionService {
   );
 
   get currentStatus(): SubscriptionStatus {
-    return this.subscriptionSubject.value.status;
+    return this.effectiveStatus(this.subscriptionSubject.value);
   }
 
   get canApply(): boolean {
-    return this.currentStatus === SubscriptionStatus.Trial || this.currentStatus === SubscriptionStatus.Active;
+    const status = this.currentStatus;
+    return status === SubscriptionStatus.Trial || status === SubscriptionStatus.Active;
   }
 
   get subscription(): SubscriptionInfo {
     return this.subscriptionSubject.value;
   }
 
-  constructor(private authService: AuthService) {
+  constructor(
+    private authService: AuthService,
+    private billingService: BillingService,
+    private storage: StorageService
+  ) {
     this.authService.currentUser$.subscribe(user => {
       if (user) {
         this.refreshStatus();
       } else {
-        this.subscriptionSubject.next({
-          status: SubscriptionStatus.None,
-          trialStartDate: null,
-          trialEndDate: null,
-          expiresAt: null,
-          productId: null
-        });
+        this.subscriptionSubject.next({ ...EMPTY_SUBSCRIPTION });
       }
     });
   }
 
+  /**
+   * Trial state is created server-side on signup; "starting" a trial locally
+   * just means pulling the fresh entitlement from the backend.
+   */
   startTrial(): void {
-    const now = new Date();
-    const trialEnd = new Date(now.getTime() + TRIAL_DURATION_MS);
-
-    const info: SubscriptionInfo = {
-      status: SubscriptionStatus.Trial,
-      trialStartDate: now.toISOString(),
-      trialEndDate: trialEnd.toISOString(),
-      expiresAt: null,
-      productId: null
-    };
-
-    this.saveSubscription(info);
-    this.subscriptionSubject.next(info);
+    this.refreshStatus();
   }
 
+  /** Pull the authoritative entitlement from the backend. */
   refreshStatus(): void {
-    const current = this.loadSubscription();
-
-    if (current.status === SubscriptionStatus.Trial && current.trialEndDate) {
-      if (new Date(current.trialEndDate) < new Date()) {
-        const expired: SubscriptionInfo = {
-          ...current,
-          status: SubscriptionStatus.Expired
-        };
-        this.saveSubscription(expired);
-        this.subscriptionSubject.next(expired);
-        return;
-      }
+    if (!this.authService.isLoggedIn) {
+      this.subscriptionSubject.next({ ...EMPTY_SUBSCRIPTION });
+      return;
     }
-
-    if (current.status === SubscriptionStatus.Active && current.expiresAt) {
-      if (new Date(current.expiresAt) < new Date()) {
-        const expired: SubscriptionInfo = {
-          ...current,
-          status: SubscriptionStatus.Expired
-        };
-        this.saveSubscription(expired);
-        this.subscriptionSubject.next(expired);
-        return;
+    this.billingService.getEntitlement().pipe(
+      catchError(() => {
+        // Offline or server trouble: keep the cached state, re-evaluated
+        // locally, never upgraded.
+        return [null];
+      })
+    ).subscribe(info => {
+      if (info) {
+        const normalised = this.normalise(info);
+        this.saveCachedSubscription(normalised);
+        this.subscriptionSubject.next(normalised);
+      } else {
+        this.subscriptionSubject.next(
+          this.withEffectiveStatus(this.subscriptionSubject.value)
+        );
       }
-    }
-
-    this.subscriptionSubject.next(current);
+    });
   }
 
+  /**
+   * Purchase a subscription through the configured store provider and have
+   * the backend verify the receipt. Fails safely (BillingNotConfiguredError
+   * or a server error) rather than faking success when billing is not set up.
+   */
   purchaseSubscription(productId: string): Observable<SubscriptionInfo> {
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-    const info: SubscriptionInfo = {
-      status: SubscriptionStatus.Active,
-      trialStartDate: this.subscriptionSubject.value.trialStartDate,
-      trialEndDate: this.subscriptionSubject.value.trialEndDate,
-      expiresAt: expiresAt.toISOString(),
-      productId
-    };
-
-    return of(info).pipe(
-      delay(1500),
-      tap(sub => {
-        this.saveSubscription(sub);
-        this.subscriptionSubject.next(sub);
+    if (!this.authService.isLoggedIn) {
+      return throwError(() => new Error('Please sign in to subscribe'));
+    }
+    return from(this.billingService.purchase(productId)).pipe(
+      switchMap(purchase => this.billingService.verifyReceipt(purchase)),
+      map(info => this.normalise(info)),
+      tap(info => {
+        this.saveCachedSubscription(info);
+        this.subscriptionSubject.next(info);
       })
     );
   }
 
+  /**
+   * Restore purchases: reconcile the store with the backend, then refresh
+   * entitlement from the server.
+   */
   restorePurchases(): Observable<SubscriptionInfo> {
-    return of(this.subscriptionSubject.value).pipe(delay(1000));
+    return from(this.billingService.restore()).pipe(
+      switchMap(purchases => {
+        if (purchases.length === 0) {
+          return throwError(() => new Error('No previous purchases found'));
+        }
+        return this.billingService.verifyReceipt(purchases[0]);
+      }),
+      map(info => this.normalise(info)),
+      tap(info => {
+        this.saveCachedSubscription(info);
+        this.subscriptionSubject.next(info);
+      })
+    );
   }
 
   getTrialDaysRemaining(): number {
@@ -140,25 +159,53 @@ export class SubscriptionService {
     }
   }
 
-  private loadSubscription(): SubscriptionInfo {
-    try {
-      const data = localStorage.getItem(SUBSCRIPTION_KEY);
-      if (data) {
-        return JSON.parse(data);
-      }
-    } catch {
-      // ignore
-    }
-    return {
-      status: SubscriptionStatus.None,
-      trialStartDate: null,
-      trialEndDate: null,
-      expiresAt: null,
-      productId: null
-    };
+  /** True when store billing is configured (determines which errors are shown). */
+  get billingConfigured(): boolean {
+    return environment.billing.provider !== 'none';
   }
 
-  private saveSubscription(info: SubscriptionInfo): void {
-    localStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify(info));
+  private normalise(info: SubscriptionInfo): SubscriptionInfo {
+    return this.withEffectiveStatus({
+      status: (info.status as SubscriptionStatus) || SubscriptionStatus.None,
+      trialStartDate: info.trialStartDate ?? null,
+      trialEndDate: info.trialEndDate ?? null,
+      expiresAt: info.expiresAt ?? null,
+      productId: info.productId ?? null
+    });
+  }
+
+  private withEffectiveStatus(info: SubscriptionInfo): SubscriptionInfo {
+    return { ...info, status: this.effectiveStatus(info) };
+  }
+
+  private effectiveStatus(info: SubscriptionInfo): SubscriptionStatus {
+    const now = Date.now();
+    if (info.status === SubscriptionStatus.Trial && info.trialEndDate) {
+      if (new Date(info.trialEndDate).getTime() < now) {
+        return SubscriptionStatus.Expired;
+      }
+    }
+    if (info.status === SubscriptionStatus.Active && info.expiresAt) {
+      if (new Date(info.expiresAt).getTime() < now) {
+        return SubscriptionStatus.Expired;
+      }
+    }
+    return info.status;
+  }
+
+  private loadCachedSubscription(): SubscriptionInfo {
+    try {
+      const data = this.storage.get(SUBSCRIPTION_CACHE_KEY);
+      if (data) {
+        return this.withEffectiveStatus(JSON.parse(data));
+      }
+    } catch {
+      // ignore corrupt state
+    }
+    return { ...EMPTY_SUBSCRIPTION };
+  }
+
+  private saveCachedSubscription(info: SubscriptionInfo): void {
+    this.storage.set(SUBSCRIPTION_CACHE_KEY, JSON.stringify(info));
   }
 }

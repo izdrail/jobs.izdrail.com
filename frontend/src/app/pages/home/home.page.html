@@ -10,10 +10,23 @@
       </div>
     </ion-title>
     <ion-buttons slot="end">
-      <ion-button (click)="loadJobs()" [disabled]="loading">
+      <ion-button (click)="filtersOpen = true" aria-label="Search filters">
+        <ion-icon name="options-outline" slot="icon-only" [color]="hasActiveFilters ? 'primary' : ''"></ion-icon>
+      </ion-button>
+      <ion-button (click)="search()" [disabled]="loading" aria-label="Reload jobs">
         <ion-icon name="refresh-outline" slot="icon-only"></ion-icon>
       </ion-button>
     </ion-buttons>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-searchbar
+      [(ngModel)]="keyword"
+      (ionChange)="search()"
+      debounce="600"
+      placeholder="Search jobs (e.g. react developer)"
+      inputmode="search"
+      aria-label="Job search keyword"
+    ></ion-searchbar>
   </ion-toolbar>
 </ion-header>
 
@@ -21,6 +34,16 @@
   <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)">
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
+
+  <!-- Offline / pending sync state -->
+  <div *ngIf="!isOnline" class="offline-banner" role="status">
+    <ion-icon name="cloud-offline-outline"></ion-icon>
+    You are offline. Applications you make are queued and sync automatically.
+  </div>
+  <div *ngIf="isOnline && pendingSyncCount > 0" class="sync-banner" role="status">
+    <ion-spinner name="crescent"></ion-spinner>
+    Syncing {{ pendingSyncCount }} queued {{ pendingSyncCount === 1 ? 'application' : 'applications' }}...
+  </div>
 
   <!-- Loading State -->
   <div *ngIf="loading" class="loading-container">
@@ -45,12 +68,23 @@
     </div>
   </div>
 
+  <!-- Error State -->
+  <div *ngIf="!loading && loadError && jobs.length === 0" class="empty-state">
+    <ion-icon name="cloud-offline-outline"></ion-icon>
+    <h2>Could not load jobs</h2>
+    <p>{{ loadError }}</p>
+    <ion-button (click)="search()" fill="outline" color="primary">
+      <ion-icon name="refresh-outline" slot="start"></ion-icon>
+      Retry
+    </ion-button>
+  </div>
+
   <!-- No More Jobs -->
-  <div *ngIf="!loading && noMoreJobs" class="empty-state">
+  <div *ngIf="!loading && !loadError && noMoreJobs" class="empty-state">
     <ion-icon name="sparkles-outline"></ion-icon>
     <h2>All caught up!</h2>
-    <p>You've seen all available jobs. Pull down to refresh or check back later.</p>
-    <ion-button (click)="loadJobs()" fill="outline" color="primary">
+    <p>You've seen all available jobs. Adjust your search or filters, or check back later.</p>
+    <ion-button (click)="search()" fill="outline" color="primary">
       <ion-icon name="refresh-outline" slot="start"></ion-icon>
       Reload Jobs
     </ion-button>
@@ -61,6 +95,8 @@
     <div
       *ngFor="let job of visibleJobs; trackBy: trackByJob; let i = index"
       class="job-card"
+      role="article"
+      [attr.aria-label]="job.title + ' at ' + (job.company || 'unknown company')"
       [style]="getCardStyle(currentIndex + i)"
       [style.z-index]="MAX_VISIBLE - i"
       (pointerdown)="onPointerDown($event, currentIndex + i)"
@@ -125,6 +161,7 @@
       [disabled]="applying"
       fill="outline"
       shape="round"
+      aria-label="Skip this job"
     >
       <ion-icon name="close" slot="icon-only"></ion-icon>
     </ion-button>
@@ -133,6 +170,7 @@
       (click)="openJobDetails(visibleJobs[0])"
       fill="outline"
       shape="round"
+      aria-label="View job details"
     >
       <ion-icon name="information-circle" slot="icon-only"></ion-icon>
     </ion-button>
@@ -142,6 +180,7 @@
       [disabled]="applying"
       fill="solid"
       shape="round"
+      aria-label="Apply to this job"
     >
       <ion-icon name="heart" slot="icon-only"></ion-icon>
     </ion-button>
@@ -155,8 +194,107 @@
     </div>
   </div>
 
+  <!-- Loading more indicator -->
+  <div *ngIf="loadingMore" class="loading-more">
+    <ion-spinner name="crescent" color="primary"></ion-spinner>
+  </div>
+
   <!-- Card Counter -->
   <div *ngIf="!loading && !noMoreJobs && jobs.length > 0" class="card-counter">
     {{ currentIndex + 1 }} / {{ jobs.length }}
   </div>
 </ion-content>
+
+<!-- Search filters -->
+<ion-modal [isOpen]="filtersOpen" (didDismiss)="filtersOpen = false">
+  <ng-template>
+    <ion-header>
+      <ion-toolbar>
+        <ion-title>Filters</ion-title>
+        <ion-buttons slot="end">
+          <ion-button (click)="filtersOpen = false">Close</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content class="ion-padding">
+      <ion-list>
+        <ion-item>
+          <ion-select
+            label="Work style"
+            labelPlacement="stacked"
+            [(ngModel)]="filters.isRemote"
+            interface="action-sheet"
+          >
+            <ion-select-option [value]="null">Any</ion-select-option>
+            <ion-select-option [value]="true">Remote only</ion-select-option>
+            <ion-select-option [value]="false">On-site only</ion-select-option>
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-select
+            label="Job type"
+            labelPlacement="stacked"
+            [(ngModel)]="filters.jobType"
+            interface="action-sheet"
+          >
+            <ion-select-option [value]="null">Any</ion-select-option>
+            <ion-select-option *ngFor="let t of jobTypeOptions" [value]="t">{{ t }}</ion-select-option>
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-select
+            label="Date posted"
+            labelPlacement="stacked"
+            [(ngModel)]="filters.datePostedWithinDays"
+            interface="action-sheet"
+          >
+            <ion-select-option *ngFor="let d of datePostedOptions" [value]="d.value">{{ d.label }}</ion-select-option>
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-select
+            label="Source site"
+            labelPlacement="stacked"
+            [(ngModel)]="filters.site"
+            interface="action-sheet"
+          >
+            <ion-select-option [value]="null">Any</ion-select-option>
+            <ion-select-option *ngFor="let s of siteOptions" [value]="s">{{ s }}</ion-select-option>
+          </ion-select>
+        </ion-item>
+        <ion-item>
+          <ion-input
+            label="Minimum salary (yearly)"
+            labelPlacement="stacked"
+            type="number"
+            min="0"
+            [(ngModel)]="filters.minSalary"
+            placeholder="e.g. 60000"
+          ></ion-input>
+        </ion-item>
+        <ion-item>
+          <ion-input
+            label="Maximum salary (yearly)"
+            labelPlacement="stacked"
+            type="number"
+            min="0"
+            [(ngModel)]="filters.maxSalary"
+            placeholder="e.g. 120000"
+          ></ion-input>
+        </ion-item>
+        <ion-item>
+          <ion-input
+            label="Technologies (comma separated)"
+            labelPlacement="stacked"
+            [(ngModel)]="technologiesInput"
+            placeholder="e.g. react, typescript"
+          ></ion-input>
+        </ion-item>
+      </ion-list>
+      <div class="filter-actions">
+        <ion-button expand="block" (click)="applyFilters()">Apply filters</ion-button>
+        <ion-button expand="block" fill="clear" (click)="resetFilters()">Reset</ion-button>
+      </div>
+    </ion-content>
+  </ng-template>
+</ion-modal>

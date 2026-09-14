@@ -1,58 +1,101 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
-import { map, catchError, tap } from 'rxjs/operators';
-import { Job, JobSearchResponse, JobSearchRequest } from '../models/job.model';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, of, throwError } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
+import {
+  Job,
+  JobSearchResponse,
+  JobSearchPage,
+  JobSearchQuery,
+  JobFilters,
+  DEFAULT_JOB_FILTERS
+} from '../models/job.model';
+import { environment } from '../../../environments/environment';
+import { StorageService } from './storage.service';
 
 const JOBS_CACHE_KEY = 'jobswipe_jobs_cache';
 const JOBS_CACHE_TS_KEY = 'jobswipe_jobs_cache_ts';
+const FILTERS_KEY = 'jobswipe_search_filters';
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+/** Thrown when the backend reports a job is gone (HTTP 404). */
+export class JobNotFoundError extends Error {
+  constructor(public readonly jobUrl: string) {
+    super('Job no longer available');
+    this.name = 'JobNotFoundError';
+  }
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class JobService {
-  private readonly apiUrl = 'https://jobs.izdrail.com/api/v1/jobs';
-
-  private readonly searchKeywords = [
-    'react', 'angular', 'vue', 'python', 'java', 'node',
-    'typescript', 'flutter', 'go', 'rust', 'devops', 'aws',
-    'fullstack', 'frontend', 'backend', 'mobile', 'kubernetes'
-  ];
+  private readonly apiUrl = environment.apiUrl;
 
   private cachedJobs: Job[] = [];
-  private currentKeywordIndex = 0;
-  private loaded = false;
+  private requestSeq = 0;
 
-  constructor(private http: HttpClient) {
+  constructor(
+    private http: HttpClient,
+    private storage: StorageService
+  ) {
     this.loadFromStorage();
   }
 
-  searchJobs(keyword: string): Observable<Job[]> {
-    const request: JobSearchRequest = { keyword };
-    return this.http.post<JobSearchResponse>(this.apiUrl, request).pipe(
-      map(response => response.data || []),
-      catchError(error => {
-        console.warn('Job search failed, using mock data:', error.message);
-        return of(this.getMockJobs(keyword));
+  /**
+   * Paged, filtered search against POST /jobs/search.
+   *
+   * API failures always surface as errors. Mock jobs exist only behind the
+   * explicit development flag; environment.prod.ts sets it to false, so a
+   * production build can never silently display fake jobs.
+   */
+  searchJobs(query: JobSearchQuery): Observable<JobSearchPage> {
+    const seq = ++this.requestSeq;
+    const body = {
+      keyword: query.keyword,
+      filters: this.toApiFilters(query.filters),
+      page: query.page ?? 1,
+      page_size: query.pageSize ?? 20
+    };
+
+    return this.http.post<JobSearchPage>(`${this.apiUrl}/jobs/search`, body).pipe(
+      map(page => {
+        if (seq !== this.requestSeq) {
+          // A newer search superseded this one; discard the stale response.
+          return { data: [], page: query.page ?? 1, page_size: query.pageSize ?? 20, total: 0, has_more: false, stale: true };
+        }
+        return page;
+      }),
+      catchError((error: HttpErrorResponse) => {
+        if (environment.useMockJobsOnError) {
+          console.warn('Job search failed, serving development mock data:', error.message);
+          return of({
+            data: this.getMockJobs(query.keyword),
+            page: 1,
+            page_size: 2,
+            total: 2,
+            has_more: false
+          });
+        }
+        return throwError(() => error);
       })
     );
   }
 
-  loadJobs(): Observable<Job[]> {
-    const keyword = this.searchKeywords[this.currentKeywordIndex % this.searchKeywords.length];
-    this.currentKeywordIndex++;
-
-    return this.searchJobs(keyword).pipe(
-      map(jobs => {
-        const newJobs = jobs.filter(
-          job => !this.cachedJobs.some(cached => cached.job_url === job.job_url)
-        );
-        this.cachedJobs = [...this.cachedJobs, ...newJobs];
-        this.saveToStorage();
-        return this.cachedJobs;
-      })
+  /** Merge a fresh page into the local cache (deduped by job_url). */
+  mergeIntoCache(jobs: Job[]): Job[] {
+    const newJobs = jobs.filter(
+      job => !this.cachedJobs.some(cached => cached.job_url === job.job_url)
     );
+    this.cachedJobs = [...this.cachedJobs, ...newJobs];
+    this.saveToStorage();
+    return this.cachedJobs;
+  }
+
+  clearCache(): void {
+    this.cachedJobs = [];
+    this.storage.remove(JOBS_CACHE_KEY);
+    this.storage.remove(JOBS_CACHE_TS_KEY);
   }
 
   hasCachedJobs(): boolean {
@@ -68,9 +111,79 @@ export class JobService {
     this.saveToStorage();
   }
 
-  getJobDetails(jobUrl: string): Observable<Job | undefined> {
-    const job = this.cachedJobs.find(j => j.job_url === jobUrl);
-    return of(job);
+  /**
+   * Resolve a job by its job_url identifier: local cache first, then the
+   * backend. A 404 becomes a typed JobNotFoundError so callers can show a
+   * clear "job no longer available" state.
+   */
+  getJobDetails(jobUrl: string): Observable<Job> {
+    const cached = this.cachedJobs.find(j => j.job_url === jobUrl);
+    if (cached) {
+      return of(cached);
+    }
+
+    return this.http
+      .get<{ data: Job }>(`${this.apiUrl}/jobs/detail`, {
+        params: { url: jobUrl }
+      })
+      .pipe(
+        map(response => response.data),
+        catchError((error: HttpErrorResponse) => {
+          if (error.status === 404) {
+            return throwError(() => new JobNotFoundError(jobUrl));
+          }
+          return throwError(() => error);
+        })
+      );
+  }
+
+  saveFilters(filters: JobFilters, keyword: string): void {
+    this.storage.set(FILTERS_KEY, JSON.stringify({ filters, keyword }));
+  }
+
+  loadFilters(): { filters: JobFilters; keyword: string } {
+    try {
+      const data = this.storage.get(FILTERS_KEY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        return {
+          filters: { ...DEFAULT_JOB_FILTERS, ...(parsed.filters || {}) },
+          keyword: parsed.keyword || ''
+        };
+      }
+    } catch {
+      // ignore corrupt state
+    }
+    return { filters: { ...DEFAULT_JOB_FILTERS }, keyword: '' };
+  }
+
+  private toApiFilters(filters?: Partial<JobFilters>): Record<string, unknown> | null {
+    if (!filters) {
+      return null;
+    }
+    const api: Record<string, unknown> = {};
+    if (filters.isRemote !== null && filters.isRemote !== undefined) {
+      api['is_remote'] = filters.isRemote;
+    }
+    if (filters.jobType) {
+      api['job_type'] = filters.jobType;
+    }
+    if (filters.minSalary !== null && filters.minSalary !== undefined) {
+      api['min_salary'] = filters.minSalary;
+    }
+    if (filters.maxSalary !== null && filters.maxSalary !== undefined) {
+      api['max_salary'] = filters.maxSalary;
+    }
+    if (filters.datePostedWithinDays) {
+      api['date_posted_within_days'] = filters.datePostedWithinDays;
+    }
+    if (filters.site) {
+      api['site'] = filters.site;
+    }
+    if (filters.technologies && filters.technologies.length > 0) {
+      api['technologies'] = filters.technologies;
+    }
+    return Object.keys(api).length > 0 ? api : null;
   }
 
   extractTechnologies(description: string): string[] {
@@ -128,32 +241,28 @@ export class JobService {
   }
 
   private saveToStorage(): void {
-    try {
-      localStorage.setItem(JOBS_CACHE_KEY, JSON.stringify(this.cachedJobs));
-      localStorage.setItem(JOBS_CACHE_TS_KEY, Date.now().toString());
-    } catch {
-      // quota exceeded or storage unavailable
-    }
+    this.storage.set(JOBS_CACHE_KEY, JSON.stringify(this.cachedJobs));
+    this.storage.set(JOBS_CACHE_TS_KEY, Date.now().toString());
   }
 
   private loadFromStorage(): void {
     try {
-      const ts = localStorage.getItem(JOBS_CACHE_TS_KEY);
+      const ts = this.storage.get(JOBS_CACHE_TS_KEY);
       if (ts && (Date.now() - parseInt(ts, 10)) > CACHE_MAX_AGE_MS) {
-        localStorage.removeItem(JOBS_CACHE_KEY);
-        localStorage.removeItem(JOBS_CACHE_TS_KEY);
+        this.storage.remove(JOBS_CACHE_KEY);
+        this.storage.remove(JOBS_CACHE_TS_KEY);
         return;
       }
-      const data = localStorage.getItem(JOBS_CACHE_KEY);
+      const data = this.storage.get(JOBS_CACHE_KEY);
       if (data) {
         this.cachedJobs = JSON.parse(data);
-        this.loaded = true;
       }
     } catch {
       // parse error or storage unavailable
     }
   }
 
+  /** Development-only fixture data; unreachable when useMockJobsOnError is false. */
   private getMockJobs(keyword: string): Job[] {
     const mockJobs: Job[] = [
       {

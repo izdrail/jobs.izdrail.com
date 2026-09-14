@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ToastController, AlertController } from '@ionic/angular';
-import { JobService } from '../../core/services/job.service';
+import { JobService, JobNotFoundError } from '../../core/services/job.service';
 import { ApplicationService } from '../../core/services/application.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
@@ -16,6 +16,8 @@ import { Job } from '../../core/models/job.model';
 export class JobDetailsPage implements OnInit {
   job: Job | null = null;
   loading = true;
+  loadError: 'not-found' | 'network' | null = null;
+  private jobUrl = '';
   applying = false;
   alreadyApplied = false;
   isLoggedIn = false;
@@ -50,8 +52,10 @@ export class JobDetailsPage implements OnInit {
     }
   }
 
-  async loadJob(url: string) {
+  loadJob(url: string) {
+    this.jobUrl = url;
     this.loading = true;
+    this.loadError = null;
     this.jobService.getJobDetails(url).subscribe({
       next: (job) => {
         this.job = job || null;
@@ -60,10 +64,18 @@ export class JobDetailsPage implements OnInit {
         }
         this.loading = false;
       },
-      error: () => {
+      error: (err) => {
+        this.job = null;
         this.loading = false;
+        this.loadError = err instanceof JobNotFoundError ? 'not-found' : 'network';
       }
     });
+  }
+
+  retry() {
+    if (this.jobUrl) {
+      this.loadJob(this.jobUrl);
+    }
   }
 
   async apply() {

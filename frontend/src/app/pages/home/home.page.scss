@@ -347,3 +347,37 @@
   backdrop-filter: blur(8px);
   z-index: 50;
 }
+
+.offline-banner,
+.sync-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+}
+
+.offline-banner {
+  background: rgba(235, 68, 90, 0.15);
+  color: var(--ion-color-danger);
+}
+
+.sync-banner {
+  background: rgba(108, 99, 255, 0.12);
+  color: var(--ion-color-primary);
+}
+
+.sync-banner ion-spinner {
+  width: 16px;
+  height: 16px;
+}
+
+.loading-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+}
+
+.filter-actions {
+  padding: 16px 0;
+}

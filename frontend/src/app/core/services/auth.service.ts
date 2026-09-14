@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, throwError } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import { map, tap, catchError } from 'rxjs/operators';
 import { User, AuthToken } from '../models/user.model';
 import { environment } from '../../../environments/environment';
+import { StorageService } from './storage.service';
 
 const AUTH_TOKEN_KEY = 'jobswipe_auth_token';
 const AUTH_USER_KEY = 'jobswipe_auth_user';
@@ -12,14 +13,28 @@ const AUTH_USER_KEY = 'jobswipe_auth_user';
   providedIn: 'root'
 })
 export class AuthService {
-  private currentUserSubject = new BehaviorSubject<User | null>(this.loadUser());
-  private tokenSubject = new BehaviorSubject<AuthToken | null>(this.loadToken());
+  private currentUserSubject: BehaviorSubject<User | null>;
+  private tokenSubject: BehaviorSubject<AuthToken | null>;
 
-  currentUser$: Observable<User | null> = this.currentUserSubject.asObservable();
-  isLoggedIn$: Observable<boolean> = this.currentUserSubject.asObservable().pipe(
-    map(user => user !== null)
-  );
-  token$: Observable<AuthToken | null> = this.tokenSubject.asObservable();
+  currentUser$: Observable<User | null>;
+  isLoggedIn$: Observable<boolean>;
+  token$: Observable<AuthToken | null>;
+
+  private apiUrl = environment.apiUrl;
+
+  constructor(
+    private http: HttpClient,
+    private storage: StorageService
+  ) {
+    this.currentUserSubject = new BehaviorSubject<User | null>(this.loadUser());
+    this.tokenSubject = new BehaviorSubject<AuthToken | null>(this.loadToken());
+    this.currentUser$ = this.currentUserSubject.asObservable();
+    this.token$ = this.tokenSubject.asObservable();
+    this.isLoggedIn$ = this.currentUserSubject.asObservable().pipe(
+      map(user => user !== null)
+    );
+    this.cleanExpiredToken();
+  }
 
   get currentUser(): User | null {
     return this.currentUserSubject.value;
@@ -33,24 +48,13 @@ export class AuthService {
     return this.tokenSubject.value?.token || null;
   }
 
-  private apiUrl = environment.apiUrl;
-
-  constructor(private http: HttpClient) {
-    this.cleanExpiredToken();
-  }
-
   signUp(email: string, password: string, name?: string): Observable<{ user: User; token: AuthToken }> {
     return this.http.post<{ user: User; token: AuthToken }>(`${this.apiUrl}/auth/signup`, {
       email,
       password,
       name
     }).pipe(
-      tap(({ user, token }) => {
-        this.saveUser(user);
-        this.saveToken(token);
-        this.currentUserSubject.next(user);
-        this.tokenSubject.next(token);
-      })
+      tap(({ user, token }) => this.setSession(user, token))
     );
   }
 
@@ -59,25 +63,49 @@ export class AuthService {
       email,
       password
     }).pipe(
-      tap(({ user, token }) => {
-        this.saveUser(user);
-        this.saveToken(token);
-        this.currentUserSubject.next(user);
-        this.tokenSubject.next(token);
+      tap(({ user, token }) => this.setSession(user, token))
+    );
+  }
+
+  /**
+   * Exchange the current (or recently expired) token for a fresh one.
+   * Used by the auth interceptor on 401 responses.
+   */
+  refreshToken(): Observable<{ user: User; token: AuthToken }> {
+    const current = this.token;
+    if (!current) {
+      return throwError(() => new Error('No token to refresh'));
+    }
+    return this.http.post<{ user: User; token: AuthToken }>(
+      `${this.apiUrl}/auth/refresh`,
+      {},
+      { headers: { Authorization: `Bearer ${current}` } }
+    ).pipe(
+      tap(({ user, token }) => this.setSession(user, token)),
+      catchError(err => {
+        this.logout();
+        return throwError(() => err);
       })
     );
   }
 
   logout(): void {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    localStorage.removeItem(AUTH_USER_KEY);
+    this.storage.remove(AUTH_TOKEN_KEY);
+    this.storage.remove(AUTH_USER_KEY);
     this.currentUserSubject.next(null);
     this.tokenSubject.next(null);
   }
 
+  private setSession(user: User, token: AuthToken): void {
+    this.saveUser(user);
+    this.saveToken(token);
+    this.currentUserSubject.next(user);
+    this.tokenSubject.next(token);
+  }
+
   private loadUser(): User | null {
     try {
-      const data = localStorage.getItem(AUTH_USER_KEY);
+      const data = this.storage.get(AUTH_USER_KEY);
       return data ? JSON.parse(data) : null;
     } catch {
       return null;
@@ -86,11 +114,11 @@ export class AuthService {
 
   private loadToken(): AuthToken | null {
     try {
-      const data = localStorage.getItem(AUTH_TOKEN_KEY);
+      const data = this.storage.get(AUTH_TOKEN_KEY);
       if (!data) return null;
       const token: AuthToken = JSON.parse(data);
       if (new Date(token.expiresAt) < new Date()) {
-        localStorage.removeItem(AUTH_TOKEN_KEY);
+        this.storage.remove(AUTH_TOKEN_KEY);
         return null;
       }
       return token;
@@ -100,11 +128,11 @@ export class AuthService {
   }
 
   private saveUser(user: User): void {
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    this.storage.set(AUTH_USER_KEY, JSON.stringify(user));
   }
 
   private saveToken(token: AuthToken): void {
-    localStorage.setItem(AUTH_TOKEN_KEY, JSON.stringify(token));
+    this.storage.set(AUTH_TOKEN_KEY, JSON.stringify(token));
   }
 
   private cleanExpiredToken(): void {
